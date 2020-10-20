@@ -1,25 +1,32 @@
 import copy, time
 from nn_trainer.utils import now_timestamp
-from typing import Tuple
+from typing import Tuple, TypedDict
 
 import torch
 from torch import nn, optim
 
 
+class DatasetSizes(TypedDict):
+    train: int
+    valid: int
+
+# TODO: move to utils
 def accuracy(predictions: torch.Tensor, labels: torch.Tensor):
     return (predictions == labels).float().mean()
 
 
+# TODO: move to another file. Shouldn't be in __init__, I think
 class NeuralNetworkTrainer:
-
-    dataset_sizes = {
-        "train": -1,
-        "valid": -1,
-        "test": -1,
-    }
+    @staticmethod
+    def validate_dataset_sizes(sizes: DatasetSizes):
+        assert sizes['train'] > 0, 'Invalid training set size'
+        assert sizes['valid'] > 0, 'Invalid validation set size'
 
     def __init__(self, train_dataloader: torch.utils.data.DataLoader,
-                 eval_dataloader: torch.utils.data.DataLoader, device, checkpoint_directory: str):
+                 eval_dataloader: torch.utils.data.DataLoader, device,
+                 checkpoint_directory: str, dataset_sizes: DatasetSizes):
+        self.validate_dataset_sizes(dataset_sizes)
+        self.dataset_sizes = dataset_sizes
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
         self.device = device
@@ -33,16 +40,16 @@ class NeuralNetworkTrainer:
             y = y.to(device)
             yield X, y
 
-    @classmethod
-    def present_run_metrics(cls, phase: str, total_loss,
+    def present_run_metrics(self, phase: str, total_loss,
                             total_correct_preds) -> Tuple[float, float]:
-        epoch_loss = total_loss / cls.dataset_sizes[phase]
-        epoch_accuracy = total_correct_preds / cls.dataset_sizes[phase]
+        epoch_loss = total_loss / self.dataset_sizes[phase]
+        epoch_accuracy = total_correct_preds / self.dataset_sizes[phase]
 
         print(f"{phase:6} | Loss: {epoch_loss:3.5f} | Acc: {epoch_accuracy:0.6f}")
         return epoch_loss, epoch_accuracy
 
-    def _training_pass(self, model: nn.Module, loss_fun, opt: optim.Optimizer) -> Tuple[float, int]:
+    def _training_pass(self, model: nn.Module, loss_fun,
+                       opt: optim.Optimizer) -> Tuple[float, int]:
         """
         Does a training epoch, returning (loss, num_correct).
         Tracks and updates the gradients, steps the optimizer.
@@ -52,8 +59,8 @@ class NeuralNetworkTrainer:
 
         total_loss = 0.0
         total_correct_preds = 0
-        for i, (inputs,
-                labels) in enumerate(self.dataloader_on_device(self.train_dataloader, self.device)):
+        for i, (inputs, labels) in enumerate(
+                self.dataloader_on_device(self.train_dataloader, self.device)):
             activations = model(inputs)
             preds = torch.argmax(activations, 1)
             loss = loss_fun(activations, labels)
@@ -81,8 +88,8 @@ class NeuralNetworkTrainer:
 
         total_loss = 0.0
         total_correct_preds = 0
-        for i, (inputs,
-                labels) in enumerate(self.dataloader_on_device(self.eval_dataloader, self.device)):
+        for i, (inputs, labels) in enumerate(
+                self.dataloader_on_device(self.eval_dataloader, self.device)):
             activations = model(inputs)
             preds = torch.argmax(activations, 1)
 
@@ -126,7 +133,8 @@ class NeuralNetworkTrainer:
                 best_accuracy = eval_epoch_accuracy
                 best_loss = eval_epoch_loss
                 best_model_weights = copy.deepcopy(model.state_dict())
-                torch.save(model, f"{self.checkpoint_directory}/best-model_{now_timestamp()}.pt")
+                torch.save(model,
+                           f"{self.checkpoint_directory}/best-model_{now_timestamp()}.pt")
 
         time_elapsed = time.time() - start_time
         print(f"Training complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s")

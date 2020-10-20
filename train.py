@@ -28,6 +28,7 @@ Training with GPU
 """
 
 from argparse import ArgumentParser, Namespace
+from nn_trainer import NeuralNetworkTrainer
 from nn_trainer.model_loading import SUPPORTED_ARCHITECTURES
 
 
@@ -78,6 +79,13 @@ def parse_arguments() -> Namespace:
 
     args = parser.parse_args()
     return args
+
+
+def build_trainer(args: Namespace) -> NeuralNetworkTrainer:
+    """
+    Builds the Neural Network Trainer and the facilities to fuel it, so that commandline
+    training can be done simply.
+    """
 
 
 def main():
