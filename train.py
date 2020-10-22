@@ -42,7 +42,7 @@ import torch
 from torch import nn, optim
 
 
-def configure_model(model: nn.Module, learning_rate: float, device: torch.types.Device):
+def configure_model(model: nn.Module, learning_rate: float, device: torch.Device):
     """Default training configuration, parameterized for the assignment requirements"""
     loss_function = nn.CrossEntropyLoss()
 
@@ -94,11 +94,16 @@ def train_model(args: Namespace) -> PersistableNet:
                   training_optimizer,
                   training_lr_scheduler,
                   epochs=args.epochs)
-    
-    net = PersistableNet(trainer._best_model, training_optimizer, {
-        image_datasets['train'].class_to_idx,
-        image_datasets['train'].classes # array to serve ase int -> encoding mapping
-    })
+
+    net = PersistableNet(
+        trainer._best_model,
+        training_optimizer,
+        {
+            "class_to_idx": image_datasets['train'].class_to_idx,
+            "idx_to_class":
+            image_datasets['train'].classes  # array, which serves as the mapping
+        })
+
     return net
 
 
