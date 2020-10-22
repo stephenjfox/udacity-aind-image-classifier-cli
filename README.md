@@ -13,6 +13,9 @@ object-oriented way.
 
 You can find the exported html in `Image Classifier Project.html`
 
+Some of the workspace instances that I encountered in the Udacity environment failed to correctly path to files, somewhat arbitrarily. So keep an eye out for that.
+
+
 
 ## Unit Test Coverage
 
