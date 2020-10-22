@@ -3,7 +3,8 @@ from typing import Callable, Dict, List, NamedTuple
 
 from nn_trainer.types import DatasetSizes
 
-from torch import nn
+import torch
+from torch import nn, optim
 from torch.tensor import Tensor
 from torch.utils.data import DataLoader, Dataset
 from torchvision import datasets, models, transforms
@@ -74,6 +75,7 @@ def get_pretrained_model(model_name: str,
                          frozen=False) -> nn.Module:
     """
     Helper to prevent duplicating highly stateful code
+    Supply `additional_hidden_units` if you want another linear layer
     """
     model_constructor = _architectures[model_name]
     model = model_constructor(pretrained=True)
@@ -122,3 +124,39 @@ def organize_data(
                          len(image_datasets['test']))
 
     return DataLoadingComponents(image_datasets, dataloaders, sizes)
+
+
+class PersistableNet:
+    @classmethod
+    def load(cls, path: str):
+        model = torch.load(path, map_location='cpu')
+        opt = optim.Adam([p for p in model.parameters() if p.requires_grad])
+        # restore state of the optimizer
+        opt.load_state_dict(model._opt_state)
+        image_index = model._image_index
+        return cls(model, opt, image_index)
+
+    def __init__(self, trained_model, trained_opt, dataset_indices):
+        """
+        Arguments:
+            - training_model: a nn.Module that's been trained to solve the classification problem above
+            - trained_opt: the supporting optimizer for `trained_model`
+            - indices: a dict with keys "idx_to_class" and "class_to_idx", with mappings from predicted indices to
+                    their associated classes and vice versa, respectively.
+        """
+        self.model = trained_model
+        self.opt = trained_opt
+        assert all(map(lambda x: x in dataset_indices, ["class_to_idx", "idx_to_class"]))
+        self.image_index = dataset_indices
+
+    def save(self, path: str):
+        """
+        Downgrade `self.model` to cpu and persist to disk
+        
+        Loading has some difficulties based on this issue
+        https://forums.developer.nvidia.com/t/cuda-driver-version-is-insufficient-for-cuda-runtime-version/56782/2
+        """
+        m = self.model
+        m._image_index = self.image_index
+        m._opt_state = self.opt.state_dict()
+        torch.save(m.to('cpu'), path)

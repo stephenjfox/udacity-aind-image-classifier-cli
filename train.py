@@ -3,6 +3,10 @@ Author's Note:
 --------------
 Adapted my notebook constructs to run in a CLI / command-line environment
 
+Some of the code is more poorly factored in this environment, because
+1. I wanted to add types
+2. My assignment is late enough and I don't want to get charged again for something
+   that's done, for cosmetic reasons.
 
 Requirements as presented:
 --------------------------
@@ -28,8 +32,9 @@ Training with GPU
 """
 
 from argparse import Namespace
+from pathlib import Path
 
-from nn_trainer.model_loading import get_pretrained_model, organize_data
+from nn_trainer.model_loading import PersistableNet, get_pretrained_model, organize_data
 from nn_trainer.training import NeuralNetworkTrainer
 from nn_trainer.utils import build_training_arg_parser
 
@@ -50,7 +55,7 @@ def configure_model(model: nn.Module, learning_rate: float, device: torch.types.
     return configured, loss_function, optimizer, learning_rate_scheduler
 
 
-def train_model(args: Namespace):
+def train_model(args: Namespace) -> PersistableNet:
     """
     Translate the arguments into function calls
     Construct a NeuralNetworkTrainer
@@ -90,15 +95,19 @@ def train_model(args: Namespace):
                   training_lr_scheduler,
                   epochs=args.epochs)
     
-    return trainer
+    net = PersistableNet(trainer._best_model, training_optimizer, {
+        image_datasets['train'].class_to_idx,
+        image_datasets['train'].classes # array to serve ase int -> encoding mapping
+    })
+    return net
 
 
 def main():
     parser = build_training_arg_parser()
     args = parser.parse_args()
 
-    trainer = train_model(args)
-    persist(trainer)
+    persistable_net = train_model(args)
+    persistable_net.save(Path(args.save_dir, 'best-model.pt'))
 
 
 if __name__ == "__main__":
