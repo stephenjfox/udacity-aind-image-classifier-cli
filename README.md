@@ -3,16 +3,23 @@
 Project code for Udacity's AI Programming with Python Nanodegree program. In this project, students first develop code for an image classifier built with PyTorch, then convert it into a command line application.
 
 
-## TODO
+## Instructions to run (for grader)
 
-- [ ] Update README with usage documentation
-- [ ] Implement training based on command-line inputs
-- [x] Unit test the full implementation
+Follows the criteria of the implementation, as articulated by Udacity
+(and outlined at the tops of `predict.py` and `train.py`), in a heavily
+object-oriented way.
+* Uses types abundantly
+* Heavily based on the strong abstractions discovered in the notebook
+
+You can find the exported html in `Image Classifier Project.html`
 
 
 ## Unit Test Coverage
 
-To run unit tests (assuming Python 3)
+I wrote unit tests to establish the floor on the core utilities in the
+  project before just grinding out the implementation.
+
+To run the tests (assuming Python 3)
 
 * `python -m unittest nn_trainer.<submodule>`
   * Example: `python -m unittest nn_trainer.utils_test`
