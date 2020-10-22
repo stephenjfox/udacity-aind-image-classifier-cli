@@ -27,72 +27,32 @@ Training with GPU
 * The training script allows users to choose training the model on a GPU
 """
 
-from argparse import ArgumentParser, Namespace
+from argparse import Namespace
+from nn_trainer.utils import build_arg_parser
 from nn_trainer import NeuralNetworkTrainer
-from nn_trainer.model_loading import SUPPORTED_ARCHITECTURES
+from nn_trainer.model_loading import organize_data
 
 
-def parse_arguments() -> Namespace:
-    parser = ArgumentParser("Image Classifier Training Program",
-                            description="Train your own classifier that works on your images!")
-
-    parser.add_argument(
-        'data_directory',
-        # required=True,
-        help='Directory of images you want a model to learn to classify')
-
-    parser.add_argument(
-        '--save_dir',
-        help='Directory to save checkpoint, intermittent models during training',
-        default='model_candidates',
-        type=str)
-
-    parser.add_argument(
-        '--arch',
-        help='Choice of model architecture, pre-trained on the ImageNet-1000 dataset',
-        default='resnet18',
-        choices=SUPPORTED_ARCHITECTURES)
-
-    hp_arg_group = parser.add_argument_group('hyperparameters',
-                                             'Options for setting hyperparameters')
-
-    hp_arg_group.add_argument(
-        '--learning_rate',
-        help=
-        'The learning rate for the learned layer, pre-trained atop the pre-trained, frozen model',
-        default=3e-3,
-        type=float)
-
-    # TODO: check if this is the correct understanding of the requirement.
-    # Shouldn't the output number of hidden units be the number of
-    # distinct classes in the `data_directory?`
-    hp_arg_group.add_argument(
-        '--hidden_units',
-        help='The number of units in an additional hidden layer for the classification',
-        type=int)
-
-    hp_arg_group.add_argument(
-        '--epochs',
-        help='The number of epochs (full passes through the data set) to train with',
-        default=5,
-        type=int)
-
-    args = parser.parse_args()
-    return args
-
-
-def build_trainer(args: Namespace) -> NeuralNetworkTrainer:
+def train_model(args: Namespace):
     """
-    Builds the Neural Network Trainer and the facilities to fuel it, so that commandline
-    training can be done simply.
+    Translate the arguments into function calls
+    Construct a NeuralNetworkTrainer
+    Construct the limited hyperparameter abstractions to pass to trainer.train()
     """
+    (training_dataloader,
+     validation_dataloader), dataset_sizes = organize_data(args.data_directory)
+    trainer = NeuralNetworkTrainer(training_dataloader,
+                                   validation_dataloader,
+                                   'cuda:0' if args.gpu else 'cpu',
+                                   checkpoint_directory=args.save_dir,
+                                   dataset_sizes=dataset_sizes)
 
 
 def main():
-    args = parse_arguments()
+    parser = build_arg_parser()
+    args = parser.parse_args()
 
-    # train_model(args)
-    pass
+    train_model(args)
 
 
 if __name__ == "__main__":

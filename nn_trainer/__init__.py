@@ -1,5 +1,5 @@
 import copy, time
-from nn_trainer.utils import now_timestamp
+from nn_trainer.utils import accuracy, now_timestamp
 from typing import Tuple, TypedDict
 
 import torch
@@ -9,10 +9,7 @@ from torch import nn, optim
 class DatasetSizes(TypedDict):
     train: int
     valid: int
-
-# TODO: move to utils
-def accuracy(predictions: torch.Tensor, labels: torch.Tensor):
-    return (predictions == labels).float().mean()
+    test: int
 
 
 # TODO: move to another file. Shouldn't be in __init__, I think
@@ -48,7 +45,7 @@ class NeuralNetworkTrainer:
         print(f"{phase:6} | Loss: {epoch_loss:3.5f} | Acc: {epoch_accuracy:0.6f}")
         return epoch_loss, epoch_accuracy
 
-    def _training_pass(self, model: nn.Module, loss_fun,
+    def _training_pass(self, model: nn.Module, loss_fun: nn.Module,
                        opt: optim.Optimizer) -> Tuple[float, int]:
         """
         Does a training epoch, returning (loss, num_correct).
