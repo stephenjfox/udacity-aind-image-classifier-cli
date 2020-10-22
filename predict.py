@@ -18,7 +18,11 @@ Predicting with GPU
 
 from argparse import ArgumentParser, Namespace
 
+from PIL import Image
+from nn_trainer.model_loading import DEFAULT_TRANSFORMS, PersistableNet
+
 import torch
+from torch import nn
 
 
 def parse_arguments() -> Namespace:
@@ -55,28 +59,56 @@ def parse_arguments() -> Namespace:
     return args
 
 
+def run_prediction(image_path, model, top_k=5, use_gpu: bool = False):
+    """
+    Predict the class (or classes) of an image using a trained deep learning model.
+    """
+    im = Image.open(image_path)
+    input_ = DEFAULT_TRANSFORMS[-1].transform(im)
+    # should the model stay GPU-only mode or be put to CPU? This is a deployment question...
+
+    with torch.no_grad():
+        output = model(input_.unsqueeze(0))
+
+    idx = model._image_index['idx_to_class']
+
+    # my implementation
+    if top_k:
+        probs, preds = torch.topk(output, k=top_k, dim=-1)
+        print("Predictions", preds.squeeze())
+        pred_classes = [idx[i] for i in preds.squeeze()]
+    else:
+        prob, pred = torch.max(output, dim=-1)
+        probs, pred_classes = prob.unsqueeze(0), [idx[pred]]
+
+    # logits are actually treated with the negative log likelihood before loss calculation
+    # need to apply a softmax
+    return nn.functional.softmax(probs, dim=-1).squeeze(), pred_classes
+
+
 def main():
     args = parse_arguments()
     # handle pushing to device
-    model = load_model(args.checkpoint)
-    image = load_image_as_tensor(args.image_path)
+    model = PersistableNet.load(args.checkpoint).model
+    # image = load_image_as_tensor(args.image_path)
     # use GPU
-    prediction = run_prediction(model, image, use_gpu=args.gpu)
+    probabilities, predictions = run_prediction(args.image_path,
+                                                model,
+                                                args.top_k,
+                                                use_gpu=args.gpu)
 
-    if args.top_k:
-        probs, preds = torch.top_k(prediction, k=args.top_k, dim=-1)
-    else:
-        prob, pred = torch.max(prediction, dim=-1)
-        probs, preds = [prob], [pred]
+    print("Probalities:", probabilities)
+    print("Predictions:", predictions)
 
     if args.category_names:
         prediction_to_category = load_mapping(args.category_names)  # :: index int -> str
-        output = list(map(prediction_to_category, preds))
+        output = list(map(prediction_to_category, predictions))
     else:
-        output = preds
+        output = predictions
 
-    for o in zip(output, probs):
-        print(o)
+    for o, p in zip(output, probabilities):
+        formatted = f"{o:20}" if args.category_names else f"{o:>4}"
+        print(f"Found class {formatted} with probability {p:0.4f}")
 
 
 if __name__ == "__main__":
