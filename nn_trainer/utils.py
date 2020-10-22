@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from datetime import datetime
+from os import makedirs
 from nn_trainer.model_loading import SUPPORTED_ARCHITECTURES
 
 import torch
@@ -7,6 +8,11 @@ import torch
 
 def accuracy(predictions: torch.Tensor, labels: torch.Tensor):
     return (predictions == labels).float().mean()
+
+
+def create_missing_directory(path: str):
+    """Create a directory, from the supplied relative `path`"""
+    makedirs(path, exist_ok=True)
 
 
 def now_timestamp() -> str:
@@ -53,6 +59,7 @@ def build_training_arg_parser() -> ArgumentParser:
     hp_arg_group.add_argument(
         '--hidden_units',
         help='The number of units in an additional hidden layer for the classification',
+        default=0,
         type=int)
 
     hp_arg_group.add_argument(

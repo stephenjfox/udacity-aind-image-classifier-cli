@@ -1,7 +1,7 @@
 """
 Author's Note:
 --------------
-
+Adapted my notebook constructs to run in a CLI / command-line environment
 
 
 Requirements as presented:
@@ -28,33 +28,77 @@ Training with GPU
 """
 
 from argparse import Namespace
-from nn_trainer.model_loading import organize_data
+
+from nn_trainer.model_loading import get_pretrained_model, organize_data
 from nn_trainer.training import NeuralNetworkTrainer
 from nn_trainer.utils import build_training_arg_parser
+
+import torch
+from torch import nn, optim
+
+
+def configure_model(model: nn.Module, learning_rate: float, device: torch.types.Device):
+    """Default training configuration, parameterized for the assignment requirements"""
+    loss_function = nn.CrossEntropyLoss()
+
+    configured = model.to(device)
+
+    parameters = [p for p in model.parameters() if p.requires_grad]
+
+    optimizer = optim.Adam(parameters, lr=learning_rate)
+    learning_rate_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5)
+    return configured, loss_function, optimizer, learning_rate_scheduler
 
 
 def train_model(args: Namespace):
     """
     Translate the arguments into function calls
     Construct a NeuralNetworkTrainer
-    Construct the limited hyperparameter abstractions to pass to trainer.train()
+    Construct the limited hyperparameter abstractions to pass to `trainer.train`
     Load a pretrained model
     """
+    print("Constructing dataset references")
     image_datasets, dataloaders, dataset_sizes = organize_data(args.data_directory)
-    trainer = NeuralNetworkTrainer(dataloaders['train'],
-                                   dataloaders['valid'],
-                                   'cuda:0' if args.gpu else 'cpu',
+    print("Loaded dataset sizes:")
+    print(f"\tTrain:  {dataset_sizes.train:3} images")
+    print(f"\tvalid: {dataset_sizes.valid:3} images")
+    print(f"\ttest:  {dataset_sizes.test:3} images")
+
+    # should the number of classes be the number from the dataset?
+    n_classes = len(image_datasets['train'].classes)
+
+    print("Detected classes =", n_classes)
+    print("Getting pre-trained model")
+    model = get_pretrained_model(args.arch,
+                                 n_classes,
+                                 additional_hidden_units=int(args.hidden_units or 0),
+                                 frozen=True)
+    training_device = torch.device('cuda:0' if args.gpu else 'cpu')
+
+    (configured_model, loss_function, training_optimizer,
+     training_lr_scheduler) = configure_model(model, args.learning_rate, training_device)
+
+    trainer = NeuralNetworkTrainer(dataloaders.train,
+                                   dataloaders.valid,
+                                   training_device,
                                    checkpoint_directory=args.save_dir,
                                    dataset_sizes=dataset_sizes)
 
-    # should the number of classes be the number from the dataset, or
-    N_CLASSES = len(image_datasets['train'].classes)
+    trainer.train(configured_model,
+                  loss_function,
+                  training_optimizer,
+                  training_lr_scheduler,
+                  epochs=args.epochs)
+    
+    return trainer
+
 
 def main():
     parser = build_training_arg_parser()
     args = parser.parse_args()
 
-    train_model(args)
+    trainer = train_model(args)
+    persist(trainer)
 
 
 if __name__ == "__main__":

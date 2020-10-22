@@ -1,28 +1,32 @@
 import copy, time
-from nn_trainer.utils import accuracy, now_timestamp
-from typing import Tuple, TypedDict
+from nn_trainer.types import DatasetSizes
+from nn_trainer.utils import accuracy, create_missing_directory, now_timestamp
+from typing import Tuple
 
 import torch
 from torch import nn, optim
 
 
-# TODO: move to another file. Shouldn't be in __init__, I think
 class NeuralNetworkTrainer:
     @staticmethod
     def validate_dataset_sizes(sizes: DatasetSizes):
-        assert sizes['train'] > 0, 'Invalid training set size'
-        assert sizes['valid'] > 0, 'Invalid validation set size'
+        assert sizes.train > 0, 'Invalid training set size'
+        assert sizes.valid > 0, 'Invalid validation set size'
 
     def __init__(self, train_dataloader: torch.utils.data.DataLoader,
                  eval_dataloader: torch.utils.data.DataLoader, device,
                  checkpoint_directory: str, dataset_sizes: DatasetSizes):
         self.validate_dataset_sizes(dataset_sizes)
+
         self.dataset_sizes = dataset_sizes
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
         self.device = device
         self.every = 50
         self.checkpoint_directory = checkpoint_directory
+
+        create_missing_directory(checkpoint_directory)
+
 
     @staticmethod
     def dataloader_on_device(dl, device):
@@ -33,8 +37,8 @@ class NeuralNetworkTrainer:
 
     def present_run_metrics(self, phase: str, total_loss,
                             total_correct_preds) -> Tuple[float, float]:
-        epoch_loss = total_loss / self.dataset_sizes[phase]
-        epoch_accuracy = total_correct_preds / self.dataset_sizes[phase]
+        epoch_loss = total_loss / getattr(self.dataset_sizes, phase)
+        epoch_accuracy = total_correct_preds / getattr(self.dataset_sizes, phase)
 
         print(f"{phase:6} | Loss: {epoch_loss:3.5f} | Acc: {epoch_accuracy:0.6f}")
         return epoch_loss, epoch_accuracy
@@ -78,7 +82,7 @@ class NeuralNetworkTrainer:
         model.eval()
 
         total_loss = 0.0
-        total_correct_preds = 0
+        total_correct_preds = 0.0 # mypy: ignore
         for i, (inputs, labels) in enumerate(
                 self.dataloader_on_device(self.eval_dataloader, self.device)):
             activations = model(inputs)
@@ -107,7 +111,6 @@ class NeuralNetworkTrainer:
         best_loss = 500  # SENTINEL
 
         for epoch in range(epochs):
-            learning_rate_scheduler.step()
             print(f"Epoch {epoch:2}/{epochs:2}")
             train_agg_loss, train_num_correct = self._training_pass(model, loss_fun, optimizer)
             self.present_run_metrics("train", train_agg_loss, train_num_correct)
@@ -116,6 +119,8 @@ class NeuralNetworkTrainer:
             eval_agg_loss, eval_num_correct = self._eval_pass(model, loss_fun)
             eval_epoch_loss, eval_epoch_accuracy = self.present_run_metrics(
                 'valid', eval_agg_loss, eval_num_correct)
+
+            learning_rate_scheduler.step()
 
             print("Eval vs Best:", eval_epoch_accuracy, 'vs', best_accuracy)
 
@@ -161,8 +166,8 @@ class NeuralNetworkTrainer:
             if i % self.every == 0:
                 print("\tAccuracy:", accuracy(preds, labels))
 
-        acc = total_correct_preds / self.dataset_sizes['test']
-        loss = total_loss / self.dataset_sizes['test']
+        acc = total_correct_preds / self.dataset_sizes.test
+        loss = total_loss / self.dataset_sizes.test
         print(f"""Overall Statistics:
         ----------------------
         Accuracy: {acc}
