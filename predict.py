@@ -17,6 +17,8 @@ Predicting with GPU
 """
 
 from argparse import ArgumentParser, Namespace
+import json
+from typing import Dict
 
 from PIL import Image
 from nn_trainer.model_loading import DEFAULT_TRANSFORMS, PersistableNet
@@ -66,9 +68,9 @@ def run_prediction(image_path, model, top_k=5, use_gpu: bool = False):
     im = Image.open(image_path)
     input_ = DEFAULT_TRANSFORMS[-1].transform(im)
     # should the model stay GPU-only mode or be put to CPU? This is a deployment question...
-
+    inference_device = torch.device('cuda:0' if use_gpu else 'cpu')
     with torch.no_grad():
-        output = model(input_.unsqueeze(0))
+        output = model.to(inference_device)(input_.unsqueeze(0))
 
     idx = model._image_index['idx_to_class']
 
@@ -84,6 +86,18 @@ def run_prediction(image_path, model, top_k=5, use_gpu: bool = False):
     # logits are actually treated with the negative log likelihood before loss calculation
     # need to apply a softmax
     return nn.functional.softmax(probs, dim=-1).squeeze(), pred_classes
+
+
+def load_mapping(path_to_mapping: str) -> Dict[str, str]:
+    """
+    Loads to class encoding-to-name dictionary from a `path_to_mapping`.
+
+    Arguments:
+        path_to_mapping: path to a JSON file
+    """
+    with open(path_to_mapping, 'r') as f:
+        d = json.load(f)
+    return d
 
 
 def main():
@@ -102,7 +116,9 @@ def main():
 
     if args.category_names:
         prediction_to_category = load_mapping(args.category_names)  # :: index int -> str
-        output = list(map(prediction_to_category, predictions))
+        output = list(map(prediction_to_category.get, predictions))
+        if any(map(lambda x: x is None, output)):
+            print("WARNING: incomplete mapping supplied for given inference")
     else:
         output = predictions
 
