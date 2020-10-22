@@ -28,9 +28,9 @@ Training with GPU
 """
 
 from argparse import Namespace
-from nn_trainer.utils import build_arg_parser
-from nn_trainer import NeuralNetworkTrainer
 from nn_trainer.model_loading import organize_data
+from nn_trainer.training import NeuralNetworkTrainer
+from nn_trainer.utils import build_training_arg_parser
 
 
 def train_model(args: Namespace):
@@ -38,18 +38,20 @@ def train_model(args: Namespace):
     Translate the arguments into function calls
     Construct a NeuralNetworkTrainer
     Construct the limited hyperparameter abstractions to pass to trainer.train()
+    Load a pretrained model
     """
-    (training_dataloader,
-     validation_dataloader), dataset_sizes = organize_data(args.data_directory)
-    trainer = NeuralNetworkTrainer(training_dataloader,
-                                   validation_dataloader,
+    image_datasets, dataloaders, dataset_sizes = organize_data(args.data_directory)
+    trainer = NeuralNetworkTrainer(dataloaders['train'],
+                                   dataloaders['valid'],
                                    'cuda:0' if args.gpu else 'cpu',
                                    checkpoint_directory=args.save_dir,
                                    dataset_sizes=dataset_sizes)
 
+    # should the number of classes be the number from the dataset, or
+    N_CLASSES = len(image_datasets['train'].classes)
 
 def main():
-    parser = build_arg_parser()
+    parser = build_training_arg_parser()
     args = parser.parse_args()
 
     train_model(args)

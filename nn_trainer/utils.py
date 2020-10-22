@@ -16,7 +16,7 @@ def now_timestamp() -> str:
     return stamp
 
 
-def build_arg_parser() -> ArgumentParser:
+def build_training_arg_parser() -> ArgumentParser:
     parser = ArgumentParser("Image Classifier Training Program",
                             description="Train your own classifier that works on your images!")
 
@@ -34,6 +34,8 @@ def build_arg_parser() -> ArgumentParser:
         help='Choice of model architecture, pre-trained on the ImageNet-1000 dataset',
         default='resnet18',
         choices=SUPPORTED_ARCHITECTURES)
+
+    parser.add_argument('--gpu', help='Enable GPU-based training', action='store_true')
 
     hp_arg_group = parser.add_argument_group('hyperparameters',
                                              'Options for setting hyperparameters')
