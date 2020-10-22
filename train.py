@@ -111,7 +111,13 @@ def main():
     args = parser.parse_args()
 
     persistable_net = train_model(args)
-    persistable_net.save(Path(args.save_dir, 'best-model.pt'))
+
+    best_model_path = Path(args.save_dir, 'best-model.pt')
+    print("Persisting to path:", best_model_path.as_posix())
+    persistable_net.save(best_model_path)
+    print("Persistence complete")
+
+    print("Program terminated")
 
 
 if __name__ == "__main__":
