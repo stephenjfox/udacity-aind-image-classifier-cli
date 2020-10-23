@@ -17,41 +17,114 @@ Predicting with GPU
 """
 
 from argparse import ArgumentParser, Namespace
+import json
+from typing import Dict
+
+from PIL import Image
+from nn_trainer.model_loading import DEFAULT_TRANSFORMS, PersistableNet
+
+import torch
+from torch import nn
 
 
 def parse_arguments() -> Namespace:
     parser = ArgumentParser("Image Classifier Training Program",
                             description="Train your own classifier that works on your images!")
 
-    parser.add_argument(
-        'image_path',
-        help='Path to an image which can be loaded via PIL and inferenced against.',
-        type=str)
+    parser.add_argument('image_path',
+                        help='Path to an image which can be loaded via PIL and '
+                        'inferenced against.',
+                        type=str)
 
     parser.add_argument('checkpoint', help='Model checkpoint to load for inference', type=str)
 
     parser.add_argument('--category_names',
                         help='Mapping between predicted indices and named classes'
                         'i.e. instead of "1" as an output, get "Russian lynx"',
-                        default='model_candidates',
                         type=str)
 
-    parser.add_argument(
-        '--top_k',
-        help=
-        'The first k-most likely predictions. Arguments less than or equal to 0 produce undefined behavior',
-        type=int)
+    parser.add_argument('--top_k',
+                        help='The first k-most likely predictions. '
+                        'Arguments less than or equal to 0 produce undefined behavior',
+                        default=0,
+                        type=int)
 
     parser.add_argument('--gpu', help='Enable GPU-based inference', action='store_true')
 
     args = parser.parse_args()
+    if not isinstance(args.top_k, int):
+        raise ValueError('Top-K argument should be valid integer')
+
+    if args.top_k < 0:
+        raise ValueError('Top-K argument should be positive integer')
+
     return args
+
+
+def run_prediction(image_path, model, top_k=5, use_gpu: bool = False):
+    """
+    Predict the class (or classes) of an image using a trained deep learning model.
+    """
+    im = Image.open(image_path)
+    input_ = DEFAULT_TRANSFORMS[-1].transform(im)
+    # should the model stay GPU-only mode or be put to CPU? This is a deployment question...
+    inference_device = torch.device('cuda:0' if use_gpu else 'cpu')
+    with torch.no_grad():
+        output = model.to(inference_device)(input_.unsqueeze(0))
+
+    idx = model._image_index['idx_to_class']
+
+    # my implementation
+    if top_k:
+        probs, preds = torch.topk(output, k=top_k, dim=-1)
+        print("Predictions", preds.squeeze())
+        pred_classes = [idx[i] for i in preds.squeeze()]
+    else:
+        prob, pred = torch.max(output, dim=-1)
+        probs, pred_classes = prob.unsqueeze(0), [idx[pred]]
+
+    # logits are actually treated with the negative log likelihood before loss calculation
+    # need to apply a softmax
+    return nn.functional.softmax(probs, dim=-1).squeeze(), pred_classes
+
+
+def load_mapping(path_to_mapping: str) -> Dict[str, str]:
+    """
+    Loads to class encoding-to-name dictionary from a `path_to_mapping`.
+
+    Arguments:
+        path_to_mapping: path to a JSON file
+    """
+    with open(path_to_mapping, 'r') as f:
+        d = json.load(f)
+    return d
 
 
 def main():
     args = parse_arguments()
+    # handle pushing to device
+    model = PersistableNet.load(args.checkpoint).model
+    # image = load_image_as_tensor(args.image_path)
+    # use GPU
+    probabilities, predictions = run_prediction(args.image_path,
+                                                model,
+                                                args.top_k,
+                                                use_gpu=args.gpu)
 
-    pass
+    print("Probalities:", probabilities)
+    print("Predictions:", predictions)
+
+    if args.category_names:
+        prediction_to_category = load_mapping(args.category_names)  # :: index int -> str
+        output = list(map(prediction_to_category.get, predictions))
+        if any(map(lambda x: x is None, output)):
+            print("WARNING: incomplete mapping supplied for given inference")
+    else:
+        output = predictions
+
+    for o, p in zip(output, probabilities):
+        formatted = f"{o:20}" if args.category_names else f"{o:>4}"
+        print(f"Found class {formatted} with probability {p:0.4f}")
 
 
 if __name__ == "__main__":

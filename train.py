@@ -42,7 +42,7 @@ import torch
 from torch import nn, optim
 
 
-def configure_model(model: nn.Module, learning_rate: float, device: torch.Device):
+def configure_model(model: nn.Module, learning_rate: float, device: torch.device):
     """Default training configuration, parameterized for the assignment requirements"""
     loss_function = nn.CrossEntropyLoss()
 
@@ -100,8 +100,7 @@ def train_model(args: Namespace) -> PersistableNet:
         training_optimizer,
         {
             "class_to_idx": image_datasets['train'].class_to_idx,
-            "idx_to_class":
-            image_datasets['train'].classes  # array, which serves as the mapping
+            "idx_to_class": image_datasets['train'].classes  # encoding mapping :: int -> int
         })
 
     return net
@@ -112,7 +111,13 @@ def main():
     args = parser.parse_args()
 
     persistable_net = train_model(args)
-    persistable_net.save(Path(args.save_dir, 'best-model.pt'))
+
+    best_model_path = Path(args.save_dir, 'best-model.pt')
+    print("Persisting to path:", best_model_path.as_posix())
+    persistable_net.save(best_model_path)
+    print("Persistence complete")
+
+    print("Program terminated")
 
 
 if __name__ == "__main__":
